@@ -2,6 +2,7 @@
 // into the native app. The service worker is intentionally excluded — it isn't
 // needed in a native shell and can serve stale assets across app updates.
 import { cp, mkdir, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -29,3 +30,18 @@ for (const d of DIRS) {
 }
 
 console.log('Synced web UI -> native/www');
+
+// If the iOS project exists and the plugin was added as copied files (Full
+// Path under ios/App/App), keep those copies up to date so `git pull` +
+// `npm run sync` actually refreshes the compiled Swift.
+const iosAppDir = join(here, '..', 'ios', 'App', 'App');
+const pluginDir = join(here, '..', 'ios-plugin');
+if (existsSync(iosAppDir)) {
+  for (const f of ['LooperAudio.swift', 'LooperAudioPlugin.m']) {
+    const dest = join(iosAppDir, f);
+    if (existsSync(dest)) {
+      await cp(join(pluginDir, f), dest);
+      console.log(`Refreshed ${f} in ios/App/App`);
+    }
+  }
+}
