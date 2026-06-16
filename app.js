@@ -45,7 +45,7 @@ const els = {
   refresh: document.getElementById('refreshBtn'),
 };
 
-const VERSION = 'v0.5.4';
+const VERSION = 'v0.5.5';
 
 const debugLog = [];
 function dbg(msg) {
@@ -720,7 +720,8 @@ function handleError(err) {
 /* ------------------------------------------------------------------ */
 
 function init() {
-  if (els.version) els.version.textContent = VERSION;
+  if (els.version) els.version.textContent = VERSION + (isNative ? ' • native' : '');
+  dbg(`engine: ${isNative ? 'native (AVAudioEngine)' : 'web (Web Audio)'}`);
 
   // Tap the version badge or debug log to copy (selection also works).
   if (els.version) els.version.addEventListener('click', () => copyText(els.version));
