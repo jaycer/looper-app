@@ -15,10 +15,11 @@
  *   - The master loop = the clamped sum of all layers, rendered into an
  *     AudioBuffer and played by an AudioBufferSourceNode with loop = true
  *     (sample-accurate, gapless).
- *   - Overdubbing captures raw mic PCM via a ScriptProcessor and sums it into
- *     a new layer, aligned to the current loop phase. When you finish, the
- *     layer is added and the playing source is swapped at the next loop
- *     boundary so the new layer joins in perfect phase.
+ *   - Overdubbing captures raw mic PCM on a dedicated audio thread via an
+ *     AudioWorklet (ScriptProcessor fallback), summing into a new layer
+ *     aligned to the current loop phase. When you finish, the layer is added
+ *     and the playing source is swapped at the next loop boundary so the new
+ *     layer joins in perfect phase.
  *
  * Cross-platform notes:
  *   - getUserMedia + AudioContext require a user gesture and a secure context
@@ -44,7 +45,7 @@ const els = {
   refresh: document.getElementById('refreshBtn'),
 };
 
-const VERSION = 'v0.4.7';
+const VERSION = 'v0.4.8';
 
 const debugLog = [];
 function dbg(msg) {
@@ -119,7 +120,9 @@ let latencyComp = 0;          // seconds, output-path latency compensation
 let micStream = null;
 let recorder = null;          // MediaRecorder (base loop only)
 let chunks = [];
-let scriptNode = null;        // ScriptProcessor (overdub capture)
+let scriptNode = null;        // ScriptProcessor (overdub capture, fallback)
+let captureNode = null;       // AudioWorkletNode (overdub capture, preferred)
+let workletReady = false;     // has the worklet module been loaded?
 let micSourceNode = null;
 let silentSink = null;        // zero-gain node so the script node runs silently
 let meterAnalyser = null;
@@ -449,22 +452,31 @@ function toMono(audioBuffer) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Overdub recording (ScriptProcessor, phase-aligned)                  */
+/* Overdub recording (AudioWorklet, with ScriptProcessor fallback)     */
 /* ------------------------------------------------------------------ */
+
+async function ensureWorklet(ctx) {
+  if (workletReady) return true;
+  if (!ctx.audioWorklet) return false;
+  try {
+    await ctx.audioWorklet.addModule('capture-worklet.js');
+    workletReady = true;
+    return true;
+  } catch (e) {
+    dbg('worklet load failed: ' + (e && e.message));
+    return false;
+  }
+}
 
 async function startOverdub() {
   const ctx = getAudioContext();
 
-  // Opening the mic can interrupt/kill the playing loop on iOS. So: only
-  // acquire it the first time, recover playback right after, and then keep
-  // the stream open for the rest of the session (no further interruptions).
   dbg(`overdub start: ctx=${ctx.state} playing=${!!masterSource}`);
   await openMic();                 // sets play-and-record; iOS may route to earpiece
-  await resumeCtx();               // recover from any 'interrupted' state
-  restartPlaybackNow();            // recover playback after the mic transition
+  await resumeCtx();
+  // The loop keeps playing through the mic transition (we set play-and-record
+  // before getUserMedia, so iOS no longer interrupts) — no restart, no click.
   dbg(`overdub ready: ctx=${ctx.state} mic=${!!micStream} playing=${!!masterSource}`);
-
-  overdubLayer = new Float32Array(frameCount);
 
   micSourceNode = ctx.createMediaStreamSource(micStream);
 
@@ -472,35 +484,64 @@ async function startOverdub() {
   meterAnalyser.fftSize = 1024;
   micSourceNode.connect(meterAnalyser);
 
-  scriptNode = ctx.createScriptProcessor(4096, 1, 1);
-  scriptNode.onaudioprocess = (e) => {
-    const input = e.inputBuffer.getChannelData(0);
-    const L = loopLength();
-    // Loop phase (in frames) for the first sample of this block.
-    let phase = (ctx.currentTime - loopEpoch - latencyComp) % L;
-    if (phase < 0) phase += L;
-    let idx = Math.floor(phase * sampleRate) % frameCount;
-    for (let i = 0; i < input.length; i++) {
-      overdubLayer[idx] += input[i];
-      if (++idx >= frameCount) idx = 0;
-    }
-  };
-
-  // ScriptProcessor must be connected to the graph to run; route it through
-  // a muted gain node so we don't monitor the mic (avoids speaker feedback).
+  // Muted sink so the capture node ticks without monitoring the mic to the
+  // speaker (avoids feedback); the worklet/script node produces no output.
   silentSink = ctx.createGain();
   silentSink.gain.value = 0;
-  micSourceNode.connect(scriptNode);
-  scriptNode.connect(silentSink);
   silentSink.connect(ctx.destination);
+
+  const haveWorklet = await ensureWorklet(ctx);
+  if (haveWorklet) {
+    captureNode = new AudioWorkletNode(ctx, 'capture-processor');
+    captureNode.port.onmessage = (e) => {
+      if (e.data && e.data.type === 'layer') finalizeOverdub(e.data.buffer);
+    };
+    captureNode.port.postMessage({ type: 'start', frameCount, loopEpoch, latencyComp });
+    micSourceNode.connect(captureNode);
+    captureNode.connect(silentSink);
+    dbg('capture: AudioWorklet');
+  } else {
+    // Fallback: ScriptProcessor on the main thread (older browsers).
+    overdubLayer = new Float32Array(frameCount);
+    scriptNode = ctx.createScriptProcessor(4096, 1, 1);
+    scriptNode.onaudioprocess = (e) => {
+      const input = e.inputBuffer.getChannelData(0);
+      const L = loopLength();
+      let phase = (ctx.currentTime - loopEpoch - latencyComp) % L;
+      if (phase < 0) phase += L;
+      let idx = Math.floor(phase * sampleRate) % frameCount;
+      for (let i = 0; i < input.length; i++) {
+        overdubLayer[idx] += input[i];
+        if (++idx >= frameCount) idx = 0;
+      }
+    };
+    micSourceNode.connect(scriptNode);
+    scriptNode.connect(silentSink);
+    dbg('capture: ScriptProcessor (fallback)');
+  }
 
   startMeter();
   setState(State.OVERDUBBING);
-  setHint('Recording layer… (use headphones — loop is quiet on the iPhone speaker while the mic is on). Tap Done to add it.');
+  setHint('Recording layer… 🎧 use headphones to hear the loop while the mic is on. Tap Done to add it.');
 }
 
-async function finishOverdub() {
+// Stop capturing. With the worklet, the layer comes back asynchronously and
+// finalizeOverdub() runs from the port message; with the fallback we call it
+// directly using the layer accumulated on the main thread.
+function finishOverdub() {
   stopMeter();
+  if (captureNode) {
+    captureNode.port.postMessage({ type: 'stop' }); // -> 'layer' message
+  } else {
+    const layer = overdubLayer;
+    overdubLayer = null;
+    finalizeOverdub(layer);
+  }
+}
+
+function finalizeOverdub(layerData) {
+  // layerData is an ArrayBuffer (worklet) or a Float32Array (fallback) or null.
+  if (captureNode) { try { captureNode.disconnect(); } catch (_) {} captureNode = null; }
   if (scriptNode) {
     scriptNode.onaudioprocess = null;
     try { scriptNode.disconnect(); } catch (_) {}
@@ -509,15 +550,17 @@ async function finishOverdub() {
   if (micSourceNode) { try { micSourceNode.disconnect(); } catch (_) {} micSourceNode = null; }
   if (silentSink) { try { silentSink.disconnect(); } catch (_) {} silentSink = null; }
 
-  layers.push(overdubLayer);
+  let layer = null;
+  if (layerData instanceof Float32Array) layer = layerData;
+  else if (layerData) layer = new Float32Array(layerData);
+  if (layer && layer.length === frameCount) layers.push(layer);
   overdubLayer = null;
 
-  // Close the mic so iOS routes output back to the loud speaker, then rebuild
-  // playback with the new layer included.
+  // Close the mic and return to the loud playback route, then fold the new
+  // layer in seamlessly at the next loop boundary.
   stopMic();
   setAudioSession('playback');
-  await resumeCtx();               // closing the mic can interrupt the session too
-  restartPlaybackNow();
+  swapMasterAtBoundary();
 
   setState(State.LOOPING);
   setHint(`${layers.length} ${layers.length === 1 ? 'layer' : 'layers'} · Overdub adds more.`);
@@ -542,6 +585,7 @@ function undoLayer() {
 function resetAll() {
   stopPlayback();
   stopMeter();
+  if (captureNode) { try { captureNode.disconnect(); } catch (_) {} captureNode = null; }
   if (scriptNode) { scriptNode.onaudioprocess = null; try { scriptNode.disconnect(); } catch (_) {} scriptNode = null; }
   if (micSourceNode) { try { micSourceNode.disconnect(); } catch (_) {} micSourceNode = null; }
   if (silentSink) { try { silentSink.disconnect(); } catch (_) {} silentSink = null; }
@@ -566,7 +610,8 @@ function startMeter() {
       const v = Math.abs(data[i] - 128) / 128;
       if (v > peak) peak = v;
     }
-    els.meterFill.style.width = Math.min(100, peak * 140) + '%';
+    // scaleX is composited (no layout/paint), unlike animating width.
+    els.meterFill.style.transform = 'scaleX(' + Math.min(1, peak * 1.4) + ')';
     meterRAF = requestAnimationFrame(tick);
   };
   tick();
@@ -575,7 +620,7 @@ function startMeter() {
 function stopMeter() {
   if (meterRAF) cancelAnimationFrame(meterRAF);
   meterRAF = 0;
-  els.meterFill.style.width = '0%';
+  els.meterFill.style.transform = 'scaleX(0)';
   meterAnalyser = null;
 }
 

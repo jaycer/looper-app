@@ -154,9 +154,10 @@ body {
     linear-gradient(#fff, #fff) center / 12px 100% no-repeat;
 }
 
+/* transform-only pulse (composited; no per-frame repaint like box-shadow) */
 @keyframes breathe {
-  0%, 100% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.14), 0 18px 50px rgba(239, 68, 68, 0.4); }
-  50%      { box-shadow: 0 0 0 14px rgba(239, 68, 68, 0.05), 0 18px 60px rgba(239, 68, 68, 0.55); }
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.03); }
 }
 
 .main-btn:disabled { opacity: 0.6; cursor: default; }
@@ -174,9 +175,11 @@ body {
 .meter.active { opacity: 1; }
 .meter-fill {
   height: 100%;
-  width: 0%;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
   background: linear-gradient(90deg, var(--green), var(--amber), var(--red));
-  transition: width 0.06s linear;
+  will-change: transform;
 }
 
 /* ---- controls / hints ---- */
@@ -277,9 +280,10 @@ body {
 .refresh.attention {
   color: #fff;
   border-color: var(--green);
+  background: #14321f;
   animation: refreshPulse 1.6s ease-in-out infinite;
 }
 @keyframes refreshPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(32, 196, 99, 0.45); }
-  50%      { box-shadow: 0 0 0 7px rgba(32, 196, 99, 0); }
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
 }

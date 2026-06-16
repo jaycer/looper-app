@@ -1,10 +1,11 @@
 /* Minimal offline cache so Looper works as an installed app. */
-const CACHE = 'looper-v11';
+const CACHE = 'looper-v12';
 const ASSETS = [
   '.',
   'index.html',
   'styles.css',
   'app.js',
+  'capture-worklet.js',
   'manifest.webmanifest',
   'icons/icon.svg',
 ];
