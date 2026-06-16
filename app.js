@@ -45,7 +45,7 @@ const els = {
   refresh: document.getElementById('refreshBtn'),
 };
 
-const VERSION = 'v0.5.6';
+const VERSION = 'v0.5.7';
 
 const debugLog = [];
 function dbg(msg) {
@@ -136,8 +136,15 @@ let overdubStarting = false;  // true while overdub capture is being set up
 // In the native shell we route all audio to the AVAudioEngine plugin instead
 // of Web Audio. In the browser these stay null and the Web Audio path runs.
 const Cap = window.Capacitor;
-const isNative = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.registerPlugin);
-const Native = isNative ? Cap.registerPlugin('LooperAudio') : null;
+const nativePlatform = !!(Cap && typeof Cap.isNativePlatform === 'function' && Cap.isNativePlatform());
+// Resolve the plugin via either API: registerPlugin (modern) or Plugins (legacy).
+let Native = null;
+if (nativePlatform) {
+  try { if (typeof Cap.registerPlugin === 'function') Native = Cap.registerPlugin('LooperAudio'); } catch (_) {}
+  if (!Native && Cap.Plugins) Native = Cap.Plugins.LooperAudio || null;
+}
+// Only take the native audio path if the plugin is actually present.
+const isNative = nativePlatform && !!Native;
 let nativeReady = false;      // has the engine been prepared (perms + session)?
 let nativeLayers = 0;         // layer count reported by the native engine
 
@@ -726,8 +733,10 @@ function handleError(err) {
 /* ------------------------------------------------------------------ */
 
 function init() {
-  if (els.version) els.version.textContent = VERSION + (isNative ? ' • native' : '');
-  dbg(`engine: ${isNative ? 'native (AVAudioEngine)' : 'web (Web Audio)'}`);
+  if (els.version) {
+    els.version.textContent = VERSION + (nativePlatform ? (Native ? ' • native' : ' • shell') : '');
+  }
+  dbg(`engine=${isNative ? 'native' : 'web'} platform=${nativePlatform} plugin=${!!Native} reg=${!!(Cap && Cap.registerPlugin)} plugins=${!!(Cap && Cap.Plugins)}`);
 
   // Tap the version badge or debug log to copy (selection also works).
   if (els.version) els.version.addEventListener('click', () => copyText(els.version));
