@@ -45,7 +45,7 @@ const els = {
   refresh: document.getElementById('refreshBtn'),
 };
 
-const VERSION = 'v0.5.1';
+const VERSION = 'v0.5.2';
 
 const debugLog = [];
 function dbg(msg) {
@@ -477,10 +477,10 @@ async function startOverdub() {
   // immediate, then do the (slow on iOS) mic acquisition in the background.
   overdubStarting = true;
   setState(State.OVERDUBBING);
-  setHint('Starting…');
+  setHint(micStream ? 'Recording layer…' : 'Starting…');
 
-  dbg(`overdub start: ctx=${ctx.state} playing=${!!masterSource}`);
-  await openMic();                 // sets play-and-record; iOS may route to earpiece
+  dbg(`overdub start: ctx=${ctx.state} mic=${!!micStream} playing=${!!masterSource}`);
+  if (!micStream) await openMic();  // first overdub acquires the mic (slow on iOS)
   await resumeCtx();
   // The loop keeps playing through the mic transition (we set play-and-record
   // before getUserMedia, so iOS no longer interrupts) — no restart, no click.
@@ -564,14 +564,13 @@ function finalizeOverdub(layerData) {
   if (layer && layer.length === frameCount) layers.push(layer);
   overdubLayer = null;
 
-  // Close the mic and return to the loud playback route, then fold the new
-  // layer in seamlessly at the next loop boundary.
-  stopMic();
-  setAudioSession('playback');
+  // Keep the mic open (and the session in play-and-record) so the next
+  // overdub starts instantly. Fold the new layer in seamlessly at the next
+  // loop boundary. The mic is released on New loop / reset.
   swapMasterAtBoundary();
 
   setState(State.LOOPING);
-  setHint(`${layers.length} ${layers.length === 1 ? 'layer' : 'layers'} · Overdub adds more.`);
+  setHint('🎧 Mic stays on for instant overdubs — loop is quiet on the phone speaker. New loop turns it off.');
 }
 
 /* ------------------------------------------------------------------ */
