@@ -4,10 +4,10 @@ This wraps the existing Looper web UI (in the repo root) as a native **iOS** and
 **macOS (Mac Catalyst)** app, so we can replace browser audio with a native
 low-latency `AVAudioEngine` engine for real musical use.
 
-> **Status: Stage 1 — native shell.** This stage gets the existing UI running
-> as a native app to validate the toolchain. Audio still runs through the
-> webview here (same behavior as the PWA). Stage 2 adds the native audio plugin
-> (see "Roadmap" below), which is where the responsiveness win comes from.
+> **Status: Stage 2 — native audio engine (first cut).** The `LooperAudio`
+> Swift plugin (`ios-plugin/`) provides native `AVAudioEngine` record/overdub/
+> playback, and `app.js` routes to it automatically when running natively. See
+> "Add the native audio plugin" below to wire the Swift files into Xcode.
 
 ## Why this architecture
 
@@ -61,6 +61,30 @@ In Xcode:
 
 Whenever you change the web UI in the repo root, re-run `npm run sync` (from
 `native/`) and rebuild.
+
+## Add the native audio plugin (Stage 2)
+
+The Swift engine lives in **`native/ios-plugin/`** (tracked in git). Add it to
+the Xcode **App** target once:
+
+1. In Xcode's Project Navigator, right-click the **`App`** group (the inner one,
+   next to `AppDelegate.swift`) → **Add Files to "App"…**
+2. Select both files from `native/ios-plugin/`:
+   - `LooperAudio.swift`
+   - `LooperAudioPlugin.m`
+   Make sure **"Add to targets: App"** is checked. (Leave "Copy items if
+   needed" checked so they're copied into the project.)
+3. If Xcode asks to **create an Objective-C bridging header**, click **Create**
+   (an empty header is fine — the `.m` registers the plugin via Capacitor's
+   macro).
+4. Build & run. `app.js` detects the native platform and calls the plugin for
+   all audio (record / overdub / undo / clear); the meter is driven by `level`
+   events from the engine.
+
+The engine uses `.playAndRecord` + `.defaultToSpeaker` with a ~5 ms IO buffer,
+loops a mixed buffer gaplessly via `AVAudioPlayerNode`, and aligns overdubs
+using the hardware input/output latency (`latencyFrames`). Those values and the
+loop-swap are first-cut — expect to fine-tune timing on a real device.
 
 ## Roadmap
 

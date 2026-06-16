@@ -45,7 +45,7 @@ const els = {
   refresh: document.getElementById('refreshBtn'),
 };
 
-const VERSION = 'v0.5.3';
+const VERSION = 'v0.5.4';
 
 const debugLog = [];
 function dbg(msg) {
@@ -129,6 +129,20 @@ let meterAnalyser = null;
 let meterRAF = 0;
 let overdubLayer = null;      // Float32Array[N] being recorded
 let overdubStarting = false;  // true while overdub capture is being set up
+
+/* ------------------------------------------------------------------ */
+/* Native (Capacitor) audio bridge                                     */
+/* ------------------------------------------------------------------ */
+// In the native shell we route all audio to the AVAudioEngine plugin instead
+// of Web Audio. In the browser these stay null and the Web Audio path runs.
+const Cap = window.Capacitor;
+const isNative = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.registerPlugin);
+const Native = isNative ? Cap.registerPlugin('LooperAudio') : null;
+let nativeReady = false;      // has the engine been prepared (perms + session)?
+let nativeLayers = 0;         // layer count reported by the native engine
+
+// Layer count for the UI, from whichever engine is active.
+function layerCount() { return isNative ? nativeLayers : layers.length; }
 
 /* ------------------------------------------------------------------ */
 /* Setup helpers                                                       */
@@ -282,11 +296,11 @@ function setState(next) {
 function updateControls() {
   const looping = state === State.LOOPING;
   els.reset.hidden = !(looping || state === State.OVERDUBBING);
-  els.undo.hidden = !(looping && layers.length >= 1);
+  els.undo.hidden = !(looping && layerCount() >= 1);
 
-  if (layers.length > 0 && state !== State.IDLE && state !== State.RECORDING) {
+  const n = layerCount();
+  if (n > 0 && state !== State.IDLE && state !== State.RECORDING) {
     els.layers.hidden = false;
-    const n = layers.length;
     els.layers.textContent = `${n} ${n === 1 ? 'layer' : 'layers'}`;
   } else {
     els.layers.hidden = true;
@@ -635,8 +649,35 @@ function stopMeter() {
 /* Button handlers                                                     */
 /* ------------------------------------------------------------------ */
 
+// Native engine: the UI state machine is shared; only the audio calls differ.
+async function onMainButtonNative() {
+  if (state === State.IDLE) {
+    if (!nativeReady) { setHint('Starting…'); await Native.prepare(); nativeReady = true; }
+    await Native.startRecord();
+    nativeLayers = 0;
+    setState(State.RECORDING);
+    setHint('');
+  } else if (state === State.RECORDING) {
+    const r = await Native.stopRecord();
+    nativeLayers = r.layers || 1;
+    setState(State.LOOPING);
+    setHint(`Loop: ${(r.seconds || 0).toFixed(1)}s · tap Overdub to layer on top.`);
+  } else if (state === State.OVERDUBBING) {
+    const r = await Native.finishOverdub();
+    nativeLayers = (r && r.layers) || nativeLayers;
+    setState(State.LOOPING);
+    setHint('');
+  } else if (state === State.LOOPING) {
+    if (nativeLayers >= MAX_LAYERS) { setHint(`Layer limit reached (${MAX_LAYERS}).`); return; }
+    setState(State.OVERDUBBING);   // optimistic — native startOverdub is fast
+    setHint('Recording layer… tap Done to add it.');
+    await Native.startOverdub();
+  }
+}
+
 async function onMainButton() {
   try {
+    if (isNative) { await onMainButtonNative(); return; }
     if (state === State.IDLE) {
       await startRecording();
     } else if (state === State.RECORDING) {
@@ -686,23 +727,54 @@ function init() {
   if (els.debug) els.debug.addEventListener('click', () => copyText(els.debug));
   if (els.refresh) els.refresh.addEventListener('click', hardRefresh);
 
-  const problem = checkSupport();
-  if (problem) {
-    els.btn.disabled = true;
-    els.status.textContent = 'Unsupported';
-    setHint(problem);
-    return;
+  // The native engine doesn't use Web Audio / MediaRecorder, so only gate the
+  // browser path on those APIs.
+  if (!isNative) {
+    const problem = checkSupport();
+    if (problem) {
+      els.btn.disabled = true;
+      els.status.textContent = 'Unsupported';
+      setHint(problem);
+      return;
+    }
   }
 
   els.btn.addEventListener('click', onMainButton);
-  els.undo.addEventListener('click', undoLayer);
-  els.reset.addEventListener('click', () => { resetAll(); setHint(''); });
+  els.undo.addEventListener('click', () => { if (isNative) undoNative(); else undoLayer(); });
+  els.reset.addEventListener('click', () => {
+    if (isNative) {
+      Native.clear().catch(() => {});
+      nativeLayers = 0;
+      setState(State.IDLE);
+      setHint('');
+    } else {
+      resetAll();
+      setHint('');
+    }
+  });
+
+  if (isNative) {
+    // Native engine streams input level for the meter.
+    Native.addListener('level', (d) => {
+      const peak = (d && d.peak) || 0;
+      els.meterFill.style.transform = 'scaleX(' + Math.min(1, peak * 1.4) + ')';
+    });
+  }
 
   window.addEventListener('pagehide', () => { stopPlayback(); stopMic(); });
 
   setState(State.IDLE);
 
   registerServiceWorker();
+}
+
+async function undoNative() {
+  try {
+    const r = await Native.undo();
+    nativeLayers = (r && r.layers) || 0;
+    if (nativeLayers === 0) { setState(State.IDLE); setHint(''); }
+    else setState(State.LOOPING);
+  } catch (_) { /* ignore */ }
 }
 
 // Register the SW and reveal the Update button when a newer build installs.
