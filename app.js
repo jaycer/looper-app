@@ -43,7 +43,7 @@ const els = {
   debug: document.getElementById('debug'),
 };
 
-const VERSION = 'v0.4.3';
+const VERSION = 'v0.4.4';
 
 const debugLog = [];
 function dbg(msg) {
@@ -134,10 +134,30 @@ function getAudioContext() {
     // Compensate for the output path delay so overdubs don't land late.
     latencyComp = audioCtx.outputLatency || audioCtx.baseLatency || 0;
     audioCtx.addEventListener('statechange', () => {
-      dbg(`ctx statechange: ${audioCtx.state}`);
+      const st = audioCtx.state;
+      dbg(`ctx statechange: ${st}`);
+      // iOS fires 'interrupted' when the mic toggles the audio session.
+      // Resume right away instead of waiting for an app-switch to recover.
+      if (st === 'interrupted') {
+        audioCtx.resume().catch(() => {});
+      } else if (st === 'running' && frameCount > 0 && layers.length > 0 &&
+                 (state === State.LOOPING || state === State.OVERDUBBING)) {
+        // The interruption tears down the playing source — rebuild it.
+        restartPlaybackNow();
+      }
     });
   }
   return audioCtx;
+}
+
+// Drive the context back to 'running' (handles iOS 'interrupted'/'suspended').
+async function resumeCtx() {
+  const ctx = getAudioContext();
+  for (let i = 0; i < 6 && ctx.state !== 'running'; i++) {
+    try { await ctx.resume(); } catch (_) {}
+    if (ctx.state !== 'running') await new Promise((r) => setTimeout(r, 60));
+  }
+  return ctx.state === 'running';
 }
 
 function pickMimeType() {
@@ -172,7 +192,7 @@ function checkSupport() {
 
 async function openMic() {
   const ctx = getAudioContext();
-  if (ctx.state === 'suspended') await ctx.resume();
+  if (ctx.state !== 'running') await resumeCtx();
   micStream = await navigator.mediaDevices.getUserMedia({
     audio: {
       echoCancellation: false,
@@ -417,7 +437,7 @@ async function startOverdub() {
   // Ask iOS to keep playback on the main speaker while recording (best effort).
   setAudioSession('play-and-record');
   await openMic();                 // opens mic; iOS may route output to earpiece
-  if (ctx.state === 'suspended') await ctx.resume();
+  await resumeCtx();               // recover from any 'interrupted' state
   restartPlaybackNow();            // recover playback after the mic transition
   dbg(`overdub ready: ctx=${ctx.state} mic=${!!micStream} playing=${!!masterSource}`);
 
@@ -473,8 +493,7 @@ async function finishOverdub() {
   // playback with the new layer included.
   stopMic();
   setAudioSession('playback');
-  const ctx = getAudioContext();
-  if (ctx.state === 'suspended') await ctx.resume();
+  await resumeCtx();               // closing the mic can interrupt the session too
   restartPlaybackNow();
 
   setState(State.LOOPING);
