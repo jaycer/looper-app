@@ -39,7 +39,17 @@ const els = {
   layers: document.getElementById('layers'),
   undo: document.getElementById('undoBtn'),
   reset: document.getElementById('resetBtn'),
+  version: document.getElementById('version'),
+  debug: document.getElementById('debug'),
 };
+
+const VERSION = 'v0.4.0';
+
+function dbg(msg) {
+  if (els.debug) els.debug.textContent = msg;
+  // eslint-disable-next-line no-console
+  console.log('[looper]', msg);
+}
 
 const State = {
   IDLE: 'idle',
@@ -84,6 +94,9 @@ function getAudioContext() {
     sampleRate = audioCtx.sampleRate;
     // Compensate for the output path delay so overdubs don't land late.
     latencyComp = audioCtx.outputLatency || audioCtx.baseLatency || 0;
+    audioCtx.addEventListener('statechange', () => {
+      dbg(`ctx statechange: ${audioCtx.state}`);
+    });
   }
   return audioCtx;
 }
@@ -305,7 +318,9 @@ async function startRecording() {
 
 async function handleBaseRecordingStop() {
   stopMeter();
-  stopMic();
+  // Keep the mic open for the whole session so we never transition the audio
+  // session between play-only and play+record (that transition kills loop
+  // playback on iOS). The stream is released only on New loop / reset.
 
   const type = (chunks[0] && chunks[0].type) || pickMimeType() || 'audio/webm';
   const blob = new Blob(chunks, { type });
@@ -360,9 +375,11 @@ async function startOverdub() {
   // acquire it the first time, recover playback right after, and then keep
   // the stream open for the rest of the session (no further interruptions).
   const hadMic = !!micStream;
+  dbg(`overdub start: ctx=${ctx.state} mic=${hadMic} playing=${!!masterSource}`);
   if (!hadMic) await openMic();
   if (ctx.state === 'suspended') await ctx.resume();
   if (!hadMic) restartPlaybackNow();
+  dbg(`overdub ready: ctx=${ctx.state} mic=${!!micStream} playing=${!!masterSource}`);
 
   overdubLayer = new Float32Array(frameCount);
 
@@ -495,6 +512,7 @@ async function onMainButton() {
     }
   } catch (err) {
     console.error(err);
+    dbg(`error: ${err && err.name}: ${err && err.message}`);
     handleError(err);
   }
 }
@@ -520,6 +538,9 @@ function handleError(err) {
 /* ------------------------------------------------------------------ */
 
 function init() {
+  // Set from JS so the badge proves the new script (not a cached one) ran.
+  if (els.version) els.version.textContent = VERSION + ' ✓';
+
   const problem = checkSupport();
   if (problem) {
     els.btn.disabled = true;

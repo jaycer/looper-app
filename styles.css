@@ -223,3 +223,28 @@ body {
   max-width: 320px;
   min-height: 1.2em;
 }
+
+.version {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 8px);
+  left: calc(env(safe-area-inset-left) + 10px);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg-elev);
+  padding: 3px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.5px;
+  z-index: 10;
+}
+
+.debug {
+  color: #6b7488;
+  font-size: 0.7rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  margin: 0;
+  max-width: 340px;
+  min-height: 1em;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
