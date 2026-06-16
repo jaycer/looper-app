@@ -45,7 +45,7 @@ const els = {
   refresh: document.getElementById('refreshBtn'),
 };
 
-const VERSION = 'v0.4.8';
+const VERSION = 'v0.4.9';
 
 const debugLog = [];
 function dbg(msg) {
@@ -698,33 +698,36 @@ function init() {
   registerServiceWorker();
 }
 
-// Register the SW and reveal the Update button only when a newer build has
-// installed and is waiting (i.e. an actual update, not the first install).
+// Register the SW and reveal the Update button when a newer build installs.
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', async () => {
     try {
+      // A controller already present at registration means a previous SW
+      // controls this page, so any new worker is an *update* (not first install).
+      const hadController = !!navigator.serviceWorker.controller;
+
       const reg = await navigator.serviceWorker.register('sw.js');
 
-      // An update may already be waiting from a previous visit.
-      if (reg.waiting && navigator.serviceWorker.controller) showUpdate();
+      const consider = (sw) => {
+        if (!sw || !hadController) return;
+        const check = () => {
+          if (sw.state === 'installed' || sw.state === 'activated') showUpdate();
+        };
+        check();                                   // may already be past 'installed'
+        sw.addEventListener('statechange', check);
+      };
 
-      reg.addEventListener('updatefound', () => {
-        const sw = reg.installing;
-        if (!sw) return;
-        sw.addEventListener('statechange', () => {
-          // 'installed' + an existing controller => this is an update.
-          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-            showUpdate();
-          }
-        });
-      });
+      consider(reg.waiting);
+      consider(reg.installing);
+      reg.addEventListener('updatefound', () => consider(reg.installing));
 
-      // Poll for new deploys periodically and whenever the app refocuses.
-      setInterval(() => reg.update().catch(() => {}), 60000);
-      document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) reg.update().catch(() => {});
-      });
+      // Check for new deploys promptly: now, on a short interval, and on focus.
+      const poll = () => reg.update().catch(() => {});
+      poll();
+      setInterval(poll, 15000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+      window.addEventListener('focus', poll);
     } catch (_) { /* SW optional */ }
   });
 }
