@@ -257,3 +257,20 @@ body {
 
 /* brief confirmation when tapping to copy */
 .copied { color: var(--green) !important; }
+
+.refresh {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 6px);
+  right: calc(env(safe-area-inset-right) + 10px);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--bg-elev);
+  border: 1.5px solid #2c313d;
+  padding: 5px 11px;
+  border-radius: 999px;
+  letter-spacing: 0.3px;
+  z-index: 10;
+  cursor: pointer;
+}
+.refresh:active { background: #20242e; transform: scale(0.96); }

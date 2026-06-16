@@ -41,9 +41,10 @@ const els = {
   reset: document.getElementById('resetBtn'),
   version: document.getElementById('version'),
   debug: document.getElementById('debug'),
+  refresh: document.getElementById('refreshBtn'),
 };
 
-const VERSION = 'v0.4.4';
+const VERSION = 'v0.4.5';
 
 const debugLog = [];
 function dbg(msg) {
@@ -72,6 +73,25 @@ async function copyText(el) {
     el.classList.add('copied');
     setTimeout(() => el.classList.remove('copied'), 700);
   } catch (_) { /* selection still works as a fallback */ }
+}
+
+// Force-fetch the latest build: drop the service worker + its caches, then
+// reload with a cache-busting query param so nothing stale is served.
+async function hardRefresh() {
+  if (els.refresh) els.refresh.textContent = '…';
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch (_) { /* best effort */ }
+  const u = new URL(location.href);
+  u.searchParams.set('v', Date.now().toString());
+  location.replace(u.toString());
 }
 
 const State = {
@@ -609,6 +629,7 @@ function init() {
   // Tap the version badge or debug log to copy (selection also works).
   if (els.version) els.version.addEventListener('click', () => copyText(els.version));
   if (els.debug) els.debug.addEventListener('click', () => copyText(els.debug));
+  if (els.refresh) els.refresh.addEventListener('click', hardRefresh);
 
   const problem = checkSupport();
   if (problem) {
