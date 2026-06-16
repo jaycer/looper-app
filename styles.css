@@ -1,0 +1,202 @@
+:root {
+  --bg: #0f1115;
+  --bg-elev: #171a21;
+  --text: #f2f4f8;
+  --muted: #8b93a7;
+  --green: #20c463;
+  --green-dark: #149a4b;
+  --red: #ef4444;
+  --red-dark: #c1342f;
+  --amber: #f59e0b;
+  --ring-size: clamp(220px, 64vw, 320px);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(120% 90% at 50% -10%, #1c2230 0%, var(--bg) 55%) fixed;
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  overflow: hidden;
+}
+
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(env(safe-area-inset-top) + 28px) 20px calc(env(safe-area-inset-bottom) + 28px);
+  text-align: center;
+}
+
+.header { margin-top: 8px; }
+
+.title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  min-height: 1.2em;
+}
+
+/* ---- center stage ---- */
+.stage {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.ring {
+  position: absolute;
+  width: var(--ring-size);
+  height: var(--ring-size);
+  border-radius: 50%;
+  border: 3px solid var(--green);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ring.active {
+  animation: pulse 1.6s ease-out infinite;
+}
+
+@keyframes pulse {
+  0%   { opacity: 0.7; transform: scale(0.92); }
+  70%  { opacity: 0;   transform: scale(1.25); }
+  100% { opacity: 0;   transform: scale(1.25); }
+}
+
+.main-btn {
+  position: relative;
+  width: var(--ring-size);
+  height: var(--ring-size);
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  transition: transform 0.12s ease, box-shadow 0.25s ease, background 0.25s ease;
+  touch-action: manipulation;
+}
+
+.main-btn:active { transform: scale(0.97); }
+
+.main-btn .icon {
+  width: 54px;
+  height: 54px;
+  display: block;
+}
+
+.main-btn .label {
+  font-size: 1.25rem;
+  letter-spacing: 0.5px;
+}
+
+/* state: idle (green, record) */
+.main-btn.idle {
+  background: radial-gradient(120% 120% at 50% 25%, #2ad874 0%, var(--green) 45%, var(--green-dark) 100%);
+  box-shadow: 0 0 0 6px rgba(32, 196, 99, 0.12), 0 18px 50px rgba(32, 196, 99, 0.35);
+}
+.main-btn.idle .icon {
+  border-radius: 50%;
+  background: #fff;
+  width: 46px;
+  height: 46px;
+}
+
+/* state: recording (red, stop) */
+.main-btn.recording {
+  background: radial-gradient(120% 120% at 50% 25%, #ff5d5d 0%, var(--red) 45%, var(--red-dark) 100%);
+  box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.14), 0 18px 50px rgba(239, 68, 68, 0.4);
+  animation: breathe 1.2s ease-in-out infinite;
+}
+.main-btn.recording .icon {
+  border-radius: 10px;
+  background: #fff;
+}
+
+/* state: looping (amber-ish, stop loop) */
+.main-btn.looping {
+  background: radial-gradient(120% 120% at 50% 25%, #ffc24d 0%, var(--amber) 45%, #b9770b 100%);
+  box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.14), 0 18px 50px rgba(245, 158, 11, 0.35);
+}
+.main-btn.looping .icon {
+  border-radius: 10px;
+  background: #fff;
+}
+
+@keyframes breathe {
+  0%, 100% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.14), 0 18px 50px rgba(239, 68, 68, 0.4); }
+  50%      { box-shadow: 0 0 0 14px rgba(239, 68, 68, 0.05), 0 18px 60px rgba(239, 68, 68, 0.55); }
+}
+
+.main-btn:disabled { opacity: 0.6; cursor: default; }
+
+/* ---- input level meter ---- */
+.meter {
+  width: min(80%, 360px);
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg-elev);
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.meter.active { opacity: 1; }
+.meter-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--green), var(--amber), var(--red));
+  transition: width 0.06s linear;
+}
+
+/* ---- controls / hints ---- */
+.controls {
+  min-height: 44px;
+  display: flex;
+  gap: 12px;
+}
+
+.ghost-btn {
+  background: transparent;
+  color: var(--text);
+  border: 1.5px solid #2c313d;
+  padding: 11px 20px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ghost-btn:active { background: var(--bg-elev); }
+
+.hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 0;
+  max-width: 320px;
+  min-height: 1.2em;
+}

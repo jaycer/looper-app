@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f1115" />
+  <title>Looper</title>
+
+  <!-- PWA / installable on iOS, macOS, Android -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Looper" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <h1 class="title">Looper</h1>
+      <p class="subtitle" id="status">Tap to record a loop</p>
+    </header>
+
+    <div class="stage">
+      <!-- pulsing ring shown while looping -->
+      <div class="ring" id="ring" aria-hidden="true"></div>
+
+      <button id="mainBtn" class="main-btn idle" aria-label="Start recording">
+        <span class="icon" id="btnIcon" aria-hidden="true"></span>
+        <span class="label" id="btnLabel">Record</span>
+      </button>
+    </div>
+
+    <!-- live input level while recording -->
+    <div class="meter" id="meter" aria-hidden="true">
+      <div class="meter-fill" id="meterFill"></div>
+    </div>
+
+    <div class="controls">
+      <button id="resetBtn" class="ghost-btn" hidden>New loop</button>
+    </div>
+
+    <p class="hint" id="hint"></p>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
