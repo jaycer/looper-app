@@ -3,7 +3,6 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - claude/audio-loop-recorder-csq7yv
       - main
   workflow_dispatch:
 
