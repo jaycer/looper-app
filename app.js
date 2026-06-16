@@ -44,7 +44,7 @@ const els = {
   refresh: document.getElementById('refreshBtn'),
 };
 
-const VERSION = 'v0.4.5';
+const VERSION = 'v0.4.6';
 
 const debugLog = [];
 function dbg(msg) {
@@ -647,10 +647,45 @@ function init() {
 
   setState(State.IDLE);
 
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
-    });
+  registerServiceWorker();
+}
+
+// Register the SW and reveal the Update button only when a newer build has
+// installed and is waiting (i.e. an actual update, not the first install).
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('sw.js');
+
+      // An update may already be waiting from a previous visit.
+      if (reg.waiting && navigator.serviceWorker.controller) showUpdate();
+
+      reg.addEventListener('updatefound', () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener('statechange', () => {
+          // 'installed' + an existing controller => this is an update.
+          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdate();
+          }
+        });
+      });
+
+      // Poll for new deploys periodically and whenever the app refocuses.
+      setInterval(() => reg.update().catch(() => {}), 60000);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) reg.update().catch(() => {});
+      });
+    } catch (_) { /* SW optional */ }
+  });
+}
+
+function showUpdate() {
+  if (els.refresh && els.refresh.hidden) {
+    els.refresh.hidden = false;
+    els.refresh.classList.add('attention');
+    dbg('update available');
   }
 }
 

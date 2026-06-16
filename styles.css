@@ -274,3 +274,12 @@ body {
   cursor: pointer;
 }
 .refresh:active { background: #20242e; transform: scale(0.96); }
+.refresh.attention {
+  color: #fff;
+  border-color: var(--green);
+  animation: refreshPulse 1.6s ease-in-out infinite;
+}
+@keyframes refreshPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(32, 196, 99, 0.45); }
+  50%      { box-shadow: 0 0 0 7px rgba(32, 196, 99, 0); }
+}
