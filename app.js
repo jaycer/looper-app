@@ -45,7 +45,7 @@ const els = {
   refresh: document.getElementById('refreshBtn'),
 };
 
-const VERSION = 'v0.5.7';
+const VERSION = 'v0.5.8';
 
 const debugLog = [];
 function dbg(msg) {
@@ -736,7 +736,8 @@ function init() {
   if (els.version) {
     els.version.textContent = VERSION + (nativePlatform ? (Native ? ' • native' : ' • shell') : '');
   }
-  dbg(`engine=${isNative ? 'native' : 'web'} platform=${nativePlatform} plugin=${!!Native} reg=${!!(Cap && Cap.registerPlugin)} plugins=${!!(Cap && Cap.Plugins)}`);
+  dbg(`engine=${isNative ? 'native' : 'web'} platform=${nativePlatform} plugin=${!!Native} reg=${!!(Cap && Cap.registerPlugin)}`);
+  try { dbg('plugins: ' + Object.keys((Cap && Cap.Plugins) || {}).join(',')); } catch (_) {}
 
   // Tap the version badge or debug log to copy (selection also works).
   if (els.version) els.version.addEventListener('click', () => copyText(els.version));
