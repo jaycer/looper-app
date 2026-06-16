@@ -43,7 +43,7 @@ const els = {
   debug: document.getElementById('debug'),
 };
 
-const VERSION = 'v0.4.2';
+const VERSION = 'v0.4.3';
 
 const debugLog = [];
 function dbg(msg) {
@@ -109,6 +109,22 @@ let overdubLayer = null;      // Float32Array[N] being recorded
 /* ------------------------------------------------------------------ */
 /* Setup helpers                                                       */
 /* ------------------------------------------------------------------ */
+
+// iOS 16.4+ exposes navigator.audioSession. Hint the platform that we want
+// to keep playback on the loud speaker while the mic is open during overdub.
+function setAudioSession(type) {
+  try {
+    const s = navigator.audioSession;
+    if (s) {
+      s.type = type;
+      dbg(`audioSession=${type} -> ${s.type}`);
+    } else {
+      dbg('no navigator.audioSession');
+    }
+  } catch (e) {
+    dbg('audioSession err: ' + (e && e.message));
+  }
+}
 
 function getAudioContext() {
   if (!audioCtx) {
@@ -398,6 +414,8 @@ async function startOverdub() {
   // acquire it the first time, recover playback right after, and then keep
   // the stream open for the rest of the session (no further interruptions).
   dbg(`overdub start: ctx=${ctx.state} playing=${!!masterSource}`);
+  // Ask iOS to keep playback on the main speaker while recording (best effort).
+  setAudioSession('play-and-record');
   await openMic();                 // opens mic; iOS may route output to earpiece
   if (ctx.state === 'suspended') await ctx.resume();
   restartPlaybackNow();            // recover playback after the mic transition
@@ -454,6 +472,7 @@ async function finishOverdub() {
   // Close the mic so iOS routes output back to the loud speaker, then rebuild
   // playback with the new layer included.
   stopMic();
+  setAudioSession('playback');
   const ctx = getAudioContext();
   if (ctx.state === 'suspended') await ctx.resume();
   restartPlaybackNow();
