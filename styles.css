@@ -8,6 +8,8 @@
   --red: #ef4444;
   --red-dark: #c1342f;
   --amber: #f59e0b;
+  --blue: #3b82f6;
+  --blue-dark: #1d5fd6;
   --ring-size: clamp(220px, 64vw, 320px);
 }
 
@@ -128,25 +130,28 @@ body {
   height: 46px;
 }
 
-/* state: recording (red, stop) */
-.main-btn.recording {
+/* state: recording base / finishing overdub (red, stop square) */
+.main-btn.recording,
+.main-btn.overdubbing {
   background: radial-gradient(120% 120% at 50% 25%, #ff5d5d 0%, var(--red) 45%, var(--red-dark) 100%);
   box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.14), 0 18px 50px rgba(239, 68, 68, 0.4);
   animation: breathe 1.2s ease-in-out infinite;
 }
-.main-btn.recording .icon {
+.main-btn.recording .icon,
+.main-btn.overdubbing .icon {
   border-radius: 10px;
   background: #fff;
 }
 
-/* state: looping (amber-ish, stop loop) */
-.main-btn.looping {
-  background: radial-gradient(120% 120% at 50% 25%, #ffc24d 0%, var(--amber) 45%, #b9770b 100%);
-  box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.14), 0 18px 50px rgba(245, 158, 11, 0.35);
+/* state: looping — main button starts an overdub (blue, plus) */
+.main-btn.overdub {
+  background: radial-gradient(120% 120% at 50% 25%, #6aa6ff 0%, var(--blue) 45%, var(--blue-dark) 100%);
+  box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.14), 0 18px 50px rgba(59, 130, 246, 0.35);
 }
-.main-btn.looping .icon {
-  border-radius: 10px;
-  background: #fff;
+.main-btn.overdub .icon {
+  background:
+    linear-gradient(#fff, #fff) center / 100% 12px no-repeat,
+    linear-gradient(#fff, #fff) center / 12px 100% no-repeat;
 }
 
 @keyframes breathe {
@@ -192,6 +197,24 @@ body {
   cursor: pointer;
 }
 .ghost-btn:active { background: var(--bg-elev); }
+
+.layers {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.layers::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  border-radius: 2px;
+  background: var(--blue);
+  vertical-align: middle;
+}
 
 .hint {
   color: var(--muted);

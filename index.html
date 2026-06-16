@@ -33,12 +33,15 @@
       </button>
     </div>
 
-    <!-- live input level while recording -->
+    <p class="layers" id="layers" hidden></p>
+
+    <!-- live input level while recording / overdubbing -->
     <div class="meter" id="meter" aria-hidden="true">
       <div class="meter-fill" id="meterFill"></div>
     </div>
 
     <div class="controls">
+      <button id="undoBtn" class="ghost-btn" hidden>Undo layer</button>
       <button id="resetBtn" class="ghost-btn" hidden>New loop</button>
     </div>
 

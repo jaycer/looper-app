@@ -1,5 +1,5 @@
 /* Minimal offline cache so Looper works as an installed app. */
-const CACHE = 'looper-v1';
+const CACHE = 'looper-v2';
 const ASSETS = [
   '.',
   'index.html',

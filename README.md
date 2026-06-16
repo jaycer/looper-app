@@ -8,18 +8,28 @@ home screen like a native app.
 
 ## How it works
 
-- **Tap the green Record button** → it turns red and starts recording from the mic.
+- **Tap the green Record button** → it turns red and starts recording the base loop.
 - **Tap the red Stop button** → the recording immediately begins looping, gapless,
   over and over.
-- **Tap Stop (amber)** or **New loop** → stop playback and you're ready to record again.
+- **Tap the blue Overdub button** → record another layer on top while the loop plays;
+  tap **Done** and your layer joins the loop in perfect phase.
+- **Undo layer** removes the most recent layer; **New loop** clears everything.
 
 Under the hood:
 
-- `getUserMedia` + `MediaRecorder` capture the audio.
-- The **Web Audio API** (`AudioBufferSourceNode` with `loop = true`) plays it back
-  with sample-accurate, gapless repeats — much tighter than `<audio loop>`.
+- `getUserMedia` + `MediaRecorder` capture the base loop.
+- Audio is kept as mono **layers** (Float32, one per overdub). The master loop is the
+  clamped sum of all layers, rendered into an `AudioBuffer` and played by an
+  `AudioBufferSourceNode` with `loop = true` for sample-accurate, gapless repeats.
+- **Overdubs** capture raw mic PCM via a `ScriptProcessor`, summed into a new layer
+  aligned to the current loop phase (with output-latency compensation). When you
+  finish, the playing source is swapped at the next loop boundary so the new layer
+  joins seamlessly.
 - Mime types and the `decodeAudioData` callback/promise forms are feature-detected
   so it works on Safari/iOS (`audio/mp4`) as well as Chrome/Firefox (`audio/webm`).
+
+> **Tip:** For the tightest overdub timing, use headphones. Recording through phone
+> speakers can bleed the loop back into the mic and (on Bluetooth) adds latency.
 
 ## Running it
 
