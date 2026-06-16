@@ -45,7 +45,7 @@ const els = {
   refresh: document.getElementById('refreshBtn'),
 };
 
-const VERSION = 'v0.5.0';
+const VERSION = 'v0.5.1';
 
 const debugLog = [];
 function dbg(msg) {
@@ -128,6 +128,7 @@ let silentSink = null;        // zero-gain node so the script node runs silently
 let meterAnalyser = null;
 let meterRAF = 0;
 let overdubLayer = null;      // Float32Array[N] being recorded
+let overdubStarting = false;  // true while overdub capture is being set up
 
 /* ------------------------------------------------------------------ */
 /* Setup helpers                                                       */
@@ -423,6 +424,7 @@ async function handleBaseRecordingStop() {
     startPlaybackNow();
     setState(State.LOOPING);
     setHint(`Loop: ${loopLength().toFixed(1)}s · tap Overdub to layer on top.`);
+    ensureWorklet(audioCtx); // warm up the capture worklet so the first overdub is snappy
   } catch (err) {
     console.error('Decode/playback failed:', err);
     resetAll();
@@ -470,6 +472,12 @@ async function ensureWorklet(ctx) {
 
 async function startOverdub() {
   const ctx = getAudioContext();
+
+  // Optimistic UI: flip to the recording state instantly so the tap feels
+  // immediate, then do the (slow on iOS) mic acquisition in the background.
+  overdubStarting = true;
+  setState(State.OVERDUBBING);
+  setHint('Starting…');
 
   dbg(`overdub start: ctx=${ctx.state} playing=${!!masterSource}`);
   await openMic();                 // sets play-and-record; iOS may route to earpiece
@@ -520,8 +528,8 @@ async function startOverdub() {
     dbg('capture: ScriptProcessor (fallback)');
   }
 
+  overdubStarting = false;
   startMeter();
-  setState(State.OVERDUBBING);
   setHint('Recording layer… 🎧 use headphones to hear the loop while the mic is on. Tap Done to add it.');
 }
 
@@ -641,7 +649,8 @@ async function onMainButton() {
       }
       await startOverdub();
     } else if (state === State.OVERDUBBING) {
-      await finishOverdub();
+      if (overdubStarting) return; // ignore Done until capture is actually live
+      finishOverdub();
     }
   } catch (err) {
     console.error(err);
@@ -671,8 +680,7 @@ function handleError(err) {
 /* ------------------------------------------------------------------ */
 
 function init() {
-  // Set from JS so the badge proves the new script (not a cached one) ran.
-  if (els.version) els.version.textContent = VERSION + ' ✓';
+  if (els.version) els.version.textContent = VERSION;
 
   // Tap the version badge or debug log to copy (selection also works).
   if (els.version) els.version.addEventListener('click', () => copyText(els.version));
