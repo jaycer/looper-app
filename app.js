@@ -43,7 +43,7 @@ const els = {
   debug: document.getElementById('debug'),
 };
 
-const VERSION = 'v0.4.0';
+const VERSION = 'v0.4.1';
 
 function dbg(msg) {
   if (els.debug) els.debug.textContent = msg;
@@ -318,9 +318,9 @@ async function startRecording() {
 
 async function handleBaseRecordingStop() {
   stopMeter();
-  // Keep the mic open for the whole session so we never transition the audio
-  // session between play-only and play+record (that transition kills loop
-  // playback on iOS). The stream is released only on New loop / reset.
+  // Close the mic so iOS routes output back to the loud main speaker
+  // (an open mic forces playback to the quiet earpiece on iOS).
+  stopMic();
 
   const type = (chunks[0] && chunks[0].type) || pickMimeType() || 'audio/webm';
   const blob = new Blob(chunks, { type });
@@ -374,11 +374,10 @@ async function startOverdub() {
   // Opening the mic can interrupt/kill the playing loop on iOS. So: only
   // acquire it the first time, recover playback right after, and then keep
   // the stream open for the rest of the session (no further interruptions).
-  const hadMic = !!micStream;
-  dbg(`overdub start: ctx=${ctx.state} mic=${hadMic} playing=${!!masterSource}`);
-  if (!hadMic) await openMic();
+  dbg(`overdub start: ctx=${ctx.state} playing=${!!masterSource}`);
+  await openMic();                 // opens mic; iOS may route output to earpiece
   if (ctx.state === 'suspended') await ctx.resume();
-  if (!hadMic) restartPlaybackNow();
+  restartPlaybackNow();            // recover playback after the mic transition
   dbg(`overdub ready: ctx=${ctx.state} mic=${!!micStream} playing=${!!masterSource}`);
 
   overdubLayer = new Float32Array(frameCount);
@@ -413,10 +412,10 @@ async function startOverdub() {
 
   startMeter();
   setState(State.OVERDUBBING);
-  setHint('Play along — your layer joins the loop when you tap Done.');
+  setHint('Recording layer… (use headphones — loop is quiet on the iPhone speaker while the mic is on). Tap Done to add it.');
 }
 
-function finishOverdub() {
+async function finishOverdub() {
   stopMeter();
   if (scriptNode) {
     scriptNode.onaudioprocess = null;
@@ -425,14 +424,19 @@ function finishOverdub() {
   }
   if (micSourceNode) { try { micSourceNode.disconnect(); } catch (_) {} micSourceNode = null; }
   if (silentSink) { try { silentSink.disconnect(); } catch (_) {} silentSink = null; }
-  // Keep the mic stream open so we don't trigger another audio-session
-  // transition that could kill playback; it's released on New loop / reset.
 
   layers.push(overdubLayer);
   overdubLayer = null;
-  swapMasterAtBoundary();
+
+  // Close the mic so iOS routes output back to the loud speaker, then rebuild
+  // playback with the new layer included.
+  stopMic();
+  const ctx = getAudioContext();
+  if (ctx.state === 'suspended') await ctx.resume();
+  restartPlaybackNow();
+
   setState(State.LOOPING);
-  setHint('');
+  setHint(`${layers.length} ${layers.length === 1 ? 'layer' : 'layers'} · Overdub adds more.`);
 }
 
 /* ------------------------------------------------------------------ */
@@ -508,7 +512,7 @@ async function onMainButton() {
       }
       await startOverdub();
     } else if (state === State.OVERDUBBING) {
-      finishOverdub();
+      await finishOverdub();
     }
   } catch (err) {
     console.error(err);
