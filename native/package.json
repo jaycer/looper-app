@@ -5,8 +5,8 @@
   "description": "Native (Capacitor) shell for the Looper app — iOS + Mac Catalyst.",
   "scripts": {
     "sync-web": "node scripts/sync-web.mjs",
-    "cap:add:ios": "npm run sync-web && cap add ios",
-    "sync": "npm run sync-web && cap sync",
+    "cap:add:ios": "npm run sync-web && cap add ios && node scripts/patch-ios-config.mjs",
+    "sync": "npm run sync-web && cap sync && node scripts/patch-ios-config.mjs",
     "open:ios": "cap open ios"
   },
   "dependencies": {

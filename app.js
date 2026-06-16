@@ -45,7 +45,7 @@ const els = {
   refresh: document.getElementById('refreshBtn'),
 };
 
-const VERSION = 'v0.5.8';
+const VERSION = 'v0.5.9';
 
 const debugLog = [];
 function dbg(msg) {
