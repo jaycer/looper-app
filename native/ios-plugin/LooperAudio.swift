@@ -13,7 +13,20 @@ import Capacitor
 ///
 /// First cut — expect to tune `latencyFrames` and the loop-swap on-device.
 @objc(LooperAudio)
-public class LooperAudio: CAPPlugin {
+public class LooperAudio: CAPPlugin, CAPBridgedPlugin {
+
+    // Capacitor 6 registration (replaces the old Objective-C CAP_PLUGIN macro).
+    public let identifier = "LooperAudio"
+    public let jsName = "LooperAudio"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "prepare", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "startRecord", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopRecord", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "startOverdub", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "finishOverdub", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "undo", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "clear", returnType: CAPPluginReturnPromise),
+    ]
 
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
