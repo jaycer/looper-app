@@ -252,6 +252,24 @@ function swapMasterAtBoundary() {
   masterSource = src;
 }
 
+// Immediately (re)start playback with a fresh source + epoch. Used to recover
+// after opening the mic, which can interrupt/kill the playing source on iOS.
+function restartPlaybackNow() {
+  const ctx = getAudioContext();
+  const startAt = ctx.currentTime + 0.06;
+  const src = ctx.createBufferSource();
+  src.buffer = buildMasterBuffer();
+  src.loop = true;
+  src.connect(ctx.destination);
+  src.start(startAt, 0);
+  if (masterSource) {
+    try { masterSource.stop(); } catch (_) {}
+    try { masterSource.disconnect(); } catch (_) {}
+  }
+  masterSource = src;
+  loopEpoch = startAt;
+}
+
 function stopPlayback() {
   if (masterSource) {
     try { masterSource.stop(); } catch (_) {}
@@ -336,8 +354,15 @@ function toMono(audioBuffer) {
 /* ------------------------------------------------------------------ */
 
 async function startOverdub() {
-  await openMic();
   const ctx = getAudioContext();
+
+  // Opening the mic can interrupt/kill the playing loop on iOS. So: only
+  // acquire it the first time, recover playback right after, and then keep
+  // the stream open for the rest of the session (no further interruptions).
+  const hadMic = !!micStream;
+  if (!hadMic) await openMic();
+  if (ctx.state === 'suspended') await ctx.resume();
+  if (!hadMic) restartPlaybackNow();
 
   overdubLayer = new Float32Array(frameCount);
 
@@ -383,7 +408,8 @@ function finishOverdub() {
   }
   if (micSourceNode) { try { micSourceNode.disconnect(); } catch (_) {} micSourceNode = null; }
   if (silentSink) { try { silentSink.disconnect(); } catch (_) {} silentSink = null; }
-  stopMic();
+  // Keep the mic stream open so we don't trigger another audio-session
+  // transition that could kill playback; it's released on New loop / reset.
 
   layers.push(overdubLayer);
   overdubLayer = null;
