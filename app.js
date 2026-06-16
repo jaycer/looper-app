@@ -45,7 +45,7 @@ const els = {
   refresh: document.getElementById('refreshBtn'),
 };
 
-const VERSION = 'v0.5.5';
+const VERSION = 'v0.5.6';
 
 const debugLog = [];
 function dbg(msg) {
@@ -652,7 +652,12 @@ function stopMeter() {
 // Native engine: the UI state machine is shared; only the audio calls differ.
 async function onMainButtonNative() {
   if (state === State.IDLE) {
-    if (!nativeReady) { setHint('Starting…'); await Native.prepare(); nativeReady = true; }
+    if (!nativeReady) {
+      setHint('Starting…');
+      const p = await Native.prepare();
+      nativeReady = true;
+      dbg(`prepared sr=${p && p.sampleRate} ch=${p && p.inputChannels} lat=${p && p.latencyFrames}`);
+    }
     await Native.startRecord();
     nativeLayers = 0;
     setState(State.RECORDING);
@@ -660,6 +665,7 @@ async function onMainButtonNative() {
   } else if (state === State.RECORDING) {
     const r = await Native.stopRecord();
     nativeLayers = r.layers || 1;
+    dbg(`loop ${r.frames}f ${(r.seconds || 0).toFixed(2)}s`);
     setState(State.LOOPING);
     setHint(`Loop: ${(r.seconds || 0).toFixed(1)}s · tap Overdub to layer on top.`);
   } else if (state === State.OVERDUBBING) {

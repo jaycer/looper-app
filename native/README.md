@@ -72,11 +72,17 @@ the Xcode **App** target once:
 2. Select both files from `native/ios-plugin/`:
    - `LooperAudio.swift`
    - `LooperAudioPlugin.m`
-   Make sure **"Add to targets: App"** is checked. (Leave "Copy items if
-   needed" checked so they're copied into the project.)
+   Check **"Add to targets: App"**, and **UNcheck "Copy items if needed"** so
+   Xcode *references* the files in `native/ios-plugin/`. That way a `git pull`
+   updates the exact files your build compiles — no stale copies.
 3. If Xcode asks to **create an Objective-C bridging header**, click **Create**
    (an empty header is fine — the `.m` registers the plugin via Capacitor's
    macro).
+
+> Already added them *with* "Copy items if needed"? Then Xcode copied them into
+> `ios/App/App/` and won't see future edits. Fix it once: select the copied
+> `LooperAudio.swift` / `LooperAudioPlugin.m` in Xcode → Delete → **Move to
+> Trash**, then re-add from `native/ios-plugin/` with **Copy unchecked**.
 4. Build & run. `app.js` detects the native platform and calls the plugin for
    all audio (record / overdub / undo / clear); the meter is driven by `level`
    events from the engine.

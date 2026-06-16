@@ -33,6 +33,7 @@ public class LooperAudio: CAPPlugin {
     private var overdubAligned = false
 
     private var latencyFrames: Int = 0
+    private var inputChannels: Int = 1
     private var meterTimer: Timer?
     private var peak: Float = 0
     private var tapInstalled = false
@@ -46,8 +47,12 @@ public class LooperAudio: CAPPlugin {
             guard granted else { call.reject("Microphone permission denied"); return }
             do {
                 try self.configureSession(session)
-                let inFmt = self.engine.inputNode.inputFormat(forBus: 0)
-                self.sampleRate = inFmt.sampleRate > 0 ? inFmt.sampleRate : 48000
+                // Use the input node's OUTPUT format as the single source of
+                // truth — this is the format the tap will actually deliver, so
+                // capture and playback rates always match (no garbled audio).
+                let hwFormat = self.engine.inputNode.outputFormat(forBus: 0)
+                self.sampleRate = hwFormat.sampleRate > 0 ? hwFormat.sampleRate : session.sampleRate
+                self.inputChannels = max(Int(hwFormat.channelCount), 1)
                 self.engine.attach(self.player)
                 let mono = AVAudioFormat(commonFormat: .pcmFormatFloat32,
                                          sampleRate: self.sampleRate,
@@ -57,6 +62,7 @@ public class LooperAudio: CAPPlugin {
                 try self.engine.start()
                 self.updateLatency(session)
                 call.resolve(["sampleRate": self.sampleRate,
+                              "inputChannels": self.inputChannels,
                               "latencyFrames": self.latencyFrames])
             } catch {
                 call.reject("prepare failed: \(error.localizedDescription)")
@@ -80,9 +86,8 @@ public class LooperAudio: CAPPlugin {
 
     private func installTap() {
         guard !tapInstalled else { return }
-        let input = engine.inputNode
-        let fmt = input.outputFormat(forBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: fmt) { [weak self] buffer, _ in
+        // Pass nil so the tap uses the bus's own format (matches `sampleRate`).
+        engine.inputNode.installTap(onBus: 0, bufferSize: 2048, format: nil) { [weak self] buffer, _ in
             self?.processInput(buffer)
         }
         tapInstalled = true
