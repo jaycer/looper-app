@@ -1,0 +1,10 @@
+# Node
+node_modules/
+
+# Capacitor generated / build artifacts
+native/node_modules/
+native/www/
+native/ios/
+native/android/
+native/.DS_Store
+.DS_Store

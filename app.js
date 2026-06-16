@@ -45,7 +45,7 @@ const els = {
   refresh: document.getElementById('refreshBtn'),
 };
 
-const VERSION = 'v0.5.2';
+const VERSION = 'v0.5.3';
 
 const debugLog = [];
 function dbg(msg) {
@@ -708,6 +708,9 @@ function init() {
 // Register the SW and reveal the Update button when a newer build installs.
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
+  // In the native (Capacitor) shell, assets are bundled — skip the SW so it
+  // can't serve stale content across app updates.
+  if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return;
   window.addEventListener('load', async () => {
     try {
       // A controller already present at registration means a previous SW

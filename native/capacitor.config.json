@@ -1,0 +1,12 @@
+{
+  "appId": "com.jaycer.looper",
+  "appName": "Looper",
+  "webDir": "www",
+  "server": {
+    "iosScheme": "looper"
+  },
+  "ios": {
+    "contentInset": "always",
+    "limitsNavigationsToAppBoundDomains": true
+  }
+}
