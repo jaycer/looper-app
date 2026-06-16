@@ -43,12 +43,35 @@ const els = {
   debug: document.getElementById('debug'),
 };
 
-const VERSION = 'v0.4.1';
+const VERSION = 'v0.4.2';
 
+const debugLog = [];
 function dbg(msg) {
-  if (els.debug) els.debug.textContent = msg;
+  const line = `${new Date().toLocaleTimeString()} ${msg}`;
+  debugLog.push(line);
+  if (debugLog.length > 8) debugLog.shift();
+  if (els.debug) els.debug.textContent = debugLog.join('\n');
   // eslint-disable-next-line no-console
   console.log('[looper]', msg);
+}
+
+// Tap the version badge or debug log to copy its text to the clipboard.
+async function copyText(el) {
+  const text = el.textContent || '';
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+      document.execCommand('copy');
+    }
+    el.classList.add('copied');
+    setTimeout(() => el.classList.remove('copied'), 700);
+  } catch (_) { /* selection still works as a fallback */ }
 }
 
 const State = {
@@ -544,6 +567,10 @@ function handleError(err) {
 function init() {
   // Set from JS so the badge proves the new script (not a cached one) ran.
   if (els.version) els.version.textContent = VERSION + ' ✓';
+
+  // Tap the version badge or debug log to copy (selection also works).
+  if (els.version) els.version.addEventListener('click', () => copyText(els.version));
+  if (els.debug) els.debug.addEventListener('click', () => copyText(els.debug));
 
   const problem = checkSupport();
   if (problem) {
