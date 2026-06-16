@@ -44,7 +44,7 @@ const els = {
   refresh: document.getElementById('refreshBtn'),
 };
 
-const VERSION = 'v0.4.6';
+const VERSION = 'v0.4.7';
 
 const debugLog = [];
 function dbg(msg) {
@@ -213,6 +213,10 @@ function checkSupport() {
 async function openMic() {
   const ctx = getAudioContext();
   if (ctx.state !== 'running') await resumeCtx();
+  // Must be a capture-compatible category, or getUserMedia throws
+  // "AudioSession category is not compatible with audio capture" (e.g. if a
+  // prior overdub left the session in 'playback').
+  setAudioSession('play-and-record');
   micStream = await navigator.mediaDevices.getUserMedia({
     audio: {
       echoCancellation: false,
@@ -397,9 +401,10 @@ async function startRecording() {
 
 async function handleBaseRecordingStop() {
   stopMeter();
-  // Close the mic so iOS routes output back to the loud main speaker
-  // (an open mic forces playback to the quiet earpiece on iOS).
+  // Close the mic and switch to the playback category so iOS routes output
+  // to the loud main speaker (an open/record session uses the quiet earpiece).
   stopMic();
+  setAudioSession('playback');
 
   const type = (chunks[0] && chunks[0].type) || pickMimeType() || 'audio/webm';
   const blob = new Blob(chunks, { type });
@@ -454,9 +459,7 @@ async function startOverdub() {
   // acquire it the first time, recover playback right after, and then keep
   // the stream open for the rest of the session (no further interruptions).
   dbg(`overdub start: ctx=${ctx.state} playing=${!!masterSource}`);
-  // Ask iOS to keep playback on the main speaker while recording (best effort).
-  setAudioSession('play-and-record');
-  await openMic();                 // opens mic; iOS may route output to earpiece
+  await openMic();                 // sets play-and-record; iOS may route to earpiece
   await resumeCtx();               // recover from any 'interrupted' state
   restartPlaybackNow();            // recover playback after the mic transition
   dbg(`overdub ready: ctx=${ctx.state} mic=${!!micStream} playing=${!!masterSource}`);
